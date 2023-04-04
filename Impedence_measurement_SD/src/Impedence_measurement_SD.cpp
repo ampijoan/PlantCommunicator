@@ -22,9 +22,9 @@ const char FILE_BASE_NAME[]="impede";
 
 const int PULSEPIN = A1;
 const int PLANTREADPIN = A2;
-int i, hz, fileNumber, startTime;
+int i, j, hz, fileNumber, startTime;
 float plantReading;
-float plantReadingArray [40][2];
+float plantReadingArray [190][2];
 
 bool logStart;
 const int STARTPIN = D7;
@@ -59,10 +59,14 @@ void setup() {
   fileNumber = 0;
   sprintf(fileName,"%s%02i.csv",FILE_BASE_NAME,fileNumber);
 
+  pinMode(STARTPIN, INPUT);
   pinMode(PULSEPIN, OUTPUT);
   pinMode(PLANTREADPIN, INPUT);
 
-  hz = 500; //initialize square wave frequency at 500hz
+  hz = 500;                                                     //initialize square wave frequency at 500hz
+
+  startTime = millis();
+  delay(1000);
 
 }
 
@@ -70,39 +74,49 @@ void loop() {
 
   Serial.printf("Press button to log data \n");
   logStart = digitalRead(STARTPIN);
-  //wait for button to be pressed
-  while(logStart==false) {
+
+  while(logStart==false) {                                      //wait for button to be pressed
     logStart = digitalRead(STARTPIN);
     delay(5);
   }
 
   Serial.printf("Starting Data Logging \n");
+
   while (sd.exists(fileName)) {                                 //cycle through files until number not found
     fileNumber++;
     sprintf(fileName,"%s%02i.csv",FILE_BASE_NAME,fileNumber);   //create numbered filename
     Serial.printf("Filename is %s\n",fileName);
   }
-  if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {     // open file for printing
+
+  if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {      // open file for printing
     Serial.println("File Failed to Open");
   }
-  file.printf("Frequency, Plant reading \n");                    // print header row
+  file.printf("Frequency, Plant reading \n");                   // print header row
 
   /* Measure plant impedence and log to SD.
   Measures from 500-10000hz in intervals of 250 hz once a second */
-  if(startTime - millis() >= 1000){
 
-    for(i=0;i<40;i++){
-      analogWrite(PULSEPIN, 127, hz);   //syntax for setting frequency of PWM pin -- analogWrite(pin, value, frequency);
-      plantReadingArray[i][0] = hz;
-      plantReadingArray[i][1] = analogRead(PLANTREADPIN);
+  for(i=0;i<190;i++){
+    analogWrite(PULSEPIN, 127, hz);   //syntax for setting frequency of PWM pin -- analogWrite(pin, value, frequency);
+    plantReadingArray[i][0] = hz;
+    plantReadingArray[i][1] = analogRead(PLANTREADPIN);
 
-      hz = hz + 250; //increase by 250 hz
+    hz = hz + 50; //increase by 250 hz
 
-      startTime = millis();
-    }
+    delay(100);
+  }
+
+  for (j=0;j<190;j++) {
+    Serial.print("x");
+    file.printf("%f , %f \n", plantReadingArray[j][0], plantReadingArray[j][1]);  //print timestamp and random number to file
+    delay(50);
   }
 
   file.close();
-  Serial.printf("Done \n");
+  Serial.printf("\nDone \n");
+  hz  = 500;                                                    //reset frequency to 500hz for next round
+  delay(500);
+
+
 
 }
