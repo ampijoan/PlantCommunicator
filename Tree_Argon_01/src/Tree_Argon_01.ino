@@ -14,7 +14,9 @@ const int PLANTREADPIN = A2;
 int i = 0;
 int hz, startTime;
 int plantReading;
-float plantReadingArray [39][2];
+int plantReadingArray [20][2];
+
+int plantImpRead(int _hz, int _i, int _PULSEPIN);
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
@@ -42,13 +44,20 @@ void setup() {
 
 void loop() {
 
-    plantReading = i;
+  //if statement to set i back to 0, for example on wake up.
 
-    sendData(myName, plantReading);
+  if(i < 20){
+    
+    plantReadingArray[0][i] = hz;
+    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
 
-    delay(10000);
+    i = i + 1;
+    hz = hz + 500;
+  }
 
-    i = i+1;
+  //parse out array here and decide what to send.
+
+
 
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
     String parse0 = Serial1.readStringUntil('=');  //+RCV
@@ -77,6 +86,29 @@ void sendData(String name, int plantReading) {
     String reply = Serial1.readStringUntil('\n');
     Serial.printf("Send reply: %s\n", reply.c_str());
   }
+}
+
+//Read impedence values from the plant at current frequency for 1 second
+int plantImpRead(int _hz, int _i, int _PULSEPIN){
+  int i = 0;
+  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
+
+  _startTime = millis();
+  _totalPlantReading = 0;
+
+  while(millis() - _startTime <= 1000){
+    analogWrite(_PULSEPIN, 127, _hz);
+    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
+    i = i+1;
+
+    _totalPlantReading = _totalPlantReading + _plantReading;
+
+  }
+
+  _avgPlantReading = _totalPlantReading / i;
+
+  return _avgPlantReading;
+
 }
 
 //set up the Reyax LoRa modules

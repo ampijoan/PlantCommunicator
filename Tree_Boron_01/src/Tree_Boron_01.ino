@@ -5,10 +5,19 @@
  * Date: 10-APR-2023
  */
 
+#include <Adafruit_MQTT.h>
+#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
+#include "Adafruit_MQTT/Adafruit_MQTT.h"
+
 #include <credentials.h> // Radio address, network, name, and password stored here
 
-int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
+TCPClient TheClient;
 
+Adafruit_MQTT_SPARK mqtt(&TheClient, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+
+Adafruit_MQTT_Publish plantFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantData");
+
+int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
 const int PULSEPIN = A1;
 const int PLANTREADPIN = A2;
@@ -17,7 +26,7 @@ int hz, startTime;
 int plantReading, previousPlantReading, plantReadingOutput;
 float plantReadingArray [39][2];
 
-SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_MODE(AUTOMATIC);
 
 void setup() {
 
@@ -55,14 +64,57 @@ void loop() {
 
   }
 
-  if(plantReading != previousPlantReading){
-    Serial.printf("input: %i\n", plantReading);
+  // if(plantReading != previousPlantReading){
+  //   Serial.printf("input: %i\n", plantReading);
 
-    previousPlantReading = plantReading;
+  //   previousPlantReading = plantReading;
+  // }
 
+if(millis()-startTime > 30000){
+  MQTT_connect();
+  plantFeed.publish(plantReading);
+  Serial.printf("input: %i\n", plantReading);
+  startTime = millis();
+}
+
+
+}
+
+
+// Function to connect and reconnect as necessary to the MQTT server.
+void MQTT_connect() {
+  int8_t ret;
+ 
+  // Return if already connected.
+  if (mqtt.connected()) {
+    return;
   }
+ 
+  Serial.print("Connecting to MQTT... ");
+ 
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
+       Serial.printf("Retrying MQTT connection in 5 seconds...\n");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds and try again
+  }
+  Serial.printf("MQTT Connected!\n");
+}
 
+bool MQTT_ping() {
+  static unsigned int last;
+  bool pingStatus;
 
+  if ((millis()-last)>120000) {
+      Serial.printf("Pinging MQTT \n");
+      pingStatus = mqtt.ping();
+      if(!pingStatus) {
+        Serial.printf("Disconnecting \n");
+        mqtt.disconnect();
+      }
+      last = millis();
+  }
+  return pingStatus;
 }
 
 //Send data with LoRa module

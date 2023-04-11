@@ -15,6 +15,7 @@
 
 void setup();
 void loop();
+int plantImpRead(int _hz, int _i, int _PULSEPIN);
 void sendData(String name, int plantReading);
 void reyaxSetup(String password);
 #line 10 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Tree_Argon_02/src/Tree_Argon_02.ino"
@@ -25,8 +26,10 @@ const int PULSEPIN = A1;
 const int PLANTREADPIN = A2;
 int i = 0;
 int hz, startTime;
-int plantReading, previousPlantReading;
-float plantReadingArray [39][2];
+int plantReading, previousPlantReading, plantReadingOutput;
+int plantReadingArray [20][2];
+
+int plantImpRead(int _hz, int _i);
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
@@ -51,11 +54,25 @@ void setup() {
 
 void loop() {
 
+  //if statement to set i back to 0, for example on wake up.
+
+  if(i < 20){
+    
+    plantReadingArray[0][i] = hz;
+    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
+
+    i = i + 1;
+    hz = hz + 500;
+  }
+
+  //parse out array here and decide what to send.
+
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
     String parse0 = Serial1.readStringUntil('=');  //+RCV
     String parse1 = Serial1.readStringUntil(',');  // address received from
     String parse2 = Serial1.readStringUntil(',');  // buffer length
     String parse3 = Serial1.readStringUntil(',');  // "plantData"
+                                                  //additional data here
     String parse4 = Serial1.readStringUntil(',');  // rssi
     String parse5 = Serial1.readStringUntil('\n'); // snr
     //String parse6 = Serial1.readString();          // extra
@@ -67,11 +84,35 @@ void loop() {
   }
 
   if(plantReading != previousPlantReading){
-    Serial.printf("input: %i\noutput: %i\n", plantReading, plantReading+1);
-    sendData(myName, plantReading);
+    plantReadingOutput = plantReading +1;
+    Serial.printf("input: %i\noutput: %i\n", plantReading, plantReadingOutput);
+    sendData(myName, plantReadingOutput);
     previousPlantReading = plantReading;
   }
 
+
+}
+
+//Read impedence values from the plant at current frequency for 1 second
+int plantImpRead(int _hz, int _i, int _PULSEPIN){
+  int i = 0;
+  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
+
+  _startTime = millis();
+  _totalPlantReading = 0;
+
+  while(millis() - _startTime <= 1000){
+    analogWrite(_PULSEPIN, 127, _hz);
+    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
+    i = i+1;
+
+    _totalPlantReading = _totalPlantReading + _plantReading;
+
+  }
+
+  _avgPlantReading = _totalPlantReading / i;
+
+  return _avgPlantReading;
 
 }
 
