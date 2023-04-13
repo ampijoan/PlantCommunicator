@@ -24,7 +24,9 @@ const int PLANTREADPIN = A2;
 int i = 0;
 int hz, startTime;
 int plantReading, previousPlantReading, plantReadingOutput;
-float plantReadingArray [39][2];
+float plantReadingArray [20][2];
+
+int plantImpRead(int _hz, int _i, int _PULSEPIN);
 
 SYSTEM_MODE(AUTOMATIC);
 
@@ -49,6 +51,25 @@ void setup() {
 
 void loop() {
 
+
+  //Added the impedence reading code in case I also want Boron taking readings
+  if(i<20){
+
+    plantReadingArray[0][i] = hz;
+    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
+
+    i = i + 1;
+    hz = hz + 500;
+  }
+
+  if(i == 20){
+    //parse data received
+
+    //publish data to cloud
+    i = 0;
+    sleepULP();
+  }
+
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
     String parse0 = Serial1.readStringUntil('=');  //+RCV
     String parse1 = Serial1.readStringUntil(',');  // address received from
@@ -64,11 +85,6 @@ void loop() {
 
   }
 
-  // if(plantReading != previousPlantReading){
-  //   Serial.printf("input: %i\n", plantReading);
-
-  //   previousPlantReading = plantReading;
-  // }
 
 if(millis()-startTime > 30000){
   MQTT_connect();
@@ -80,6 +96,36 @@ if(millis()-startTime > 30000){
 
 }
 
+//Read impedence values from the plant at current frequency for 1 second
+int plantImpRead(int _hz, int _i, int _PULSEPIN){
+  int i = 0;
+  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
+
+  _startTime = millis();
+  _totalPlantReading = 0;
+
+  while(millis() - _startTime <= 1000){
+    analogWrite(_PULSEPIN, 127, _hz);
+    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
+    i = i+1;
+
+    _totalPlantReading = _totalPlantReading + _plantReading;
+
+  }
+
+  _avgPlantReading = _totalPlantReading / i;
+
+  return _avgPlantReading;
+
+}
+
+//Sleep until Argon receives data over Serial1 (LoRa)
+void sleepULP(){
+  SystemSleepConfiguration config;
+  config.mode(SystemSleepMode::ULTRA_LOW_POWER).usart(Serial1);
+  SystemSleepResult result = System.sleep(config);
+
+}
 
 // Function to connect and reconnect as necessary to the MQTT server.
 void MQTT_connect() {

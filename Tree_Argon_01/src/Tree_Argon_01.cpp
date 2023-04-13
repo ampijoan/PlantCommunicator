@@ -15,6 +15,7 @@
 
 void setup();
 void loop();
+void sleepULP();
 void sendData(String name, int plantReading);
 void reyaxSetup(String password);
 #line 10 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Tree_Argon_01/src/Tree_Argon_01.ino"
@@ -22,6 +23,7 @@ int SENDADDRESS;   // address of radio to be sent to. Set depending on where you
 
 const int PULSEPIN = A1;
 const int PLANTREADPIN = A2;
+const int sleepDuration = 60000;
 int i = 0;
 int hz, startTime;
 int plantReading;
@@ -54,34 +56,61 @@ void setup() {
 }
 
 void loop() {
-
   //if statement to set i back to 0, for example on wake up.
 
   if(i < 20){
-    
     plantReadingArray[0][i] = hz;
     plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
 
     i = i + 1;
     hz = hz + 500;
+
   }
 
+  if(i == 20){
   //parse out array here and decide what to send.
 
+  //send data here
 
+    i = 0; //reset counter and go to sleep for sleepDuration (currently one minute)
+    //sleepULP();
 
-  if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
-    String parse0 = Serial1.readStringUntil('=');  //+RCV
-    String parse1 = Serial1.readStringUntil(',');  // address received from
-    String parse2 = Serial1.readStringUntil(',');  // buffer length
-    String parse3 = Serial1.readStringUntil(',');  // plantReading
-    String parse5 = Serial1.readStringUntil(',');  // rssi
-    String parse6 = Serial1.readStringUntil('\n'); // snr
-    String parse7 = Serial1.readString();          // extra
-  } 
+  }
 
 }
 
+//Read impedence values from the plant at current frequency for 1 second
+int plantImpRead(int _hz, int _i, int _PULSEPIN){
+  int i = 0;
+  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
+
+  _startTime = millis();
+  _totalPlantReading = 0;
+
+  while(millis() - _startTime <= 1000){
+    analogWrite(_PULSEPIN, 127, _hz);
+    _plantReading = analogRead(PLANTREADPIN);
+    i = i+1;
+
+    _totalPlantReading = _totalPlantReading + _plantReading;
+
+    Serial.printf("%i\n", _plantReading);
+
+  }
+
+  _avgPlantReading = _totalPlantReading / i;
+
+  return _avgPlantReading;
+
+}
+
+// sleep in ulta low power mode until it's time to take a reading
+void sleepULP(){
+  SystemSleepConfiguration config;
+  config.mode(SystemSleepMode::ULTRA_LOW_POWER).duration(sleepDuration);
+  SystemSleepResult result = System.sleep(config);
+
+}
 
 //Send data with LoRa module
 void sendData(String name, int plantReading) {
@@ -97,29 +126,6 @@ void sendData(String name, int plantReading) {
     String reply = Serial1.readStringUntil('\n');
     Serial.printf("Send reply: %s\n", reply.c_str());
   }
-}
-
-//Read impedence values from the plant at current frequency for 1 second
-int plantImpRead(int _hz, int _i, int _PULSEPIN){
-  int i = 0;
-  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
-
-  _startTime = millis();
-  _totalPlantReading = 0;
-
-  while(millis() - _startTime <= 1000){
-    analogWrite(_PULSEPIN, 127, _hz);
-    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
-    i = i+1;
-
-    _totalPlantReading = _totalPlantReading + _plantReading;
-
-  }
-
-  _avgPlantReading = _totalPlantReading / i;
-
-  return _avgPlantReading;
-
 }
 
 //set up the Reyax LoRa modules

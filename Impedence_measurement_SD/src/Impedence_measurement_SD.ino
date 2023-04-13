@@ -15,7 +15,7 @@ const int PULSEPIN = A1;
 const int PLANTREADPIN = A2;
 int i, j, hz, fileNumber, startTime;
 float plantReading;
-float plantReadingArray [190][2];
+float plantReadingArray [20][2];
 
 bool logStart;
 const int STARTPIN = D7;
@@ -85,29 +85,56 @@ void loop() {
   file.printf("Frequency, Plant reading \n");                   // print header row
 
   /* Measure plant impedence and log to SD.
-  Measures from 500-10000hz in intervals of 250 hz once a second */
+  Measures from 500-10000hz in intervals of 500 hz once a second */
 
-  for(i=0;i<=190;i++){
-    analogWrite(PULSEPIN, 127, hz);   //syntax for setting frequency of PWM pin -- analogWrite(pin, value, frequency);
-    plantReadingArray[i][0] = hz;
-    plantReadingArray[i][1] = analogRead(PLANTREADPIN);
+  if(i < 20){
+    plantReadingArray[0][i] = hz;
+    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
 
-    hz = hz + 50; //increase by 250 hz
+    i = i + 1;
+    hz = hz + 500;
 
-    delay(100);
+  }
+if(i == 20){
+  for (j=0;j<=20;j++) {
+    Serial.printf("frequency: %i    plant reading: %i\n", plantReadingArray[j][0], plantReadingArray[j][1]);
+    //uncomment to write to SD instead of Serial Monitor
+    //Serial.print("x");
+    //file.printf("%i , %i \n", plantReadingArray[j][0], plantReadingArray[j][1]);  //print timestamp and random number to file
+    //delay(50);
   }
 
-  for (j=0;j<=190;j++) {
-    Serial.print("x");
-    file.printf("%f , %f \n", plantReadingArray[j][0], plantReadingArray[j][1]);  //print timestamp and random number to file
-    delay(50);
+  if(j == 20){
+    i = 0;
+    file.close();
+    Serial.printf("\nDone \n");
+    hz  = 500;                                                    //reset frequency to 500hz for next round
+    delay(500);
+  }
+}
+
+
+}
+
+//Read impedence values from the plant at current frequency for 1 second
+int plantImpRead(int _hz, int _i, int _PULSEPIN){
+  int i = 0;
+  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
+
+  _startTime = millis();
+  _totalPlantReading = 0;
+
+  while(millis() - _startTime <= 1000){
+    analogWrite(_PULSEPIN, 127, _hz);
+    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
+    i = i+1;
+
+    _totalPlantReading = _totalPlantReading + _plantReading;
+
   }
 
-  file.close();
-  Serial.printf("\nDone \n");
-  hz  = 500;                                                    //reset frequency to 500hz for next round
-  delay(500);
+  _avgPlantReading = _totalPlantReading / i;
 
-
+  return _avgPlantReading;
 
 }

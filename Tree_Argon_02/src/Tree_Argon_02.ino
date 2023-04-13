@@ -42,19 +42,6 @@ void setup() {
 
 void loop() {
 
-  //if statement to set i back to 0, for example on wake up.
-
-  if(i < 20){
-    
-    plantReadingArray[0][i] = hz;
-    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
-
-    i = i + 1;
-    hz = hz + 500;
-  }
-
-  //parse out array here and decide what to send.
-
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
     String parse0 = Serial1.readStringUntil('=');  //+RCV
     String parse1 = Serial1.readStringUntil(',');  // address received from
@@ -71,11 +58,24 @@ void loop() {
 
   }
 
-  if(plantReading != previousPlantReading){
-    plantReadingOutput = plantReading +1;
-    Serial.printf("input: %i\noutput: %i\n", plantReading, plantReadingOutput);
-    sendData(myName, plantReadingOutput);
-    previousPlantReading = plantReading;
+
+  if(i < 20){
+    
+    plantReadingArray[0][i] = hz;
+    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
+
+    i = i + 1;
+    hz = hz + 500;
+  }
+
+  if(i == 20){
+
+    //parse out array here and decide what to send.
+
+    //send data
+    i = 0;
+    sleepULP();
+
   }
 
 
@@ -101,6 +101,14 @@ int plantImpRead(int _hz, int _i, int _PULSEPIN){
   _avgPlantReading = _totalPlantReading / i;
 
   return _avgPlantReading;
+
+}
+
+//Sleep until Argon receives data over Serial1 (LoRa)
+void sleepULP(){
+  SystemSleepConfiguration config;
+  config.mode(SystemSleepMode::ULTRA_LOW_POWER).usart(Serial1);
+  SystemSleepResult result = System.sleep(config);
 
 }
 
