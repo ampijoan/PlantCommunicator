@@ -12,7 +12,8 @@ const int chipSelect = SS;
 const char FILE_BASE_NAME[]="impede";
 
 const int PULSEPIN = A1;
-const int PLANTREADPIN = A2;
+const int PULSEREADPIN = A2;
+const int PLANTREADPIN = A3;
 int i, j, hz, fileNumber, startTime;
 float plantReading;
 float plantReadingArray [20][2];
@@ -54,7 +55,7 @@ void setup() {
   pinMode(PULSEPIN, OUTPUT);
   pinMode(PLANTREADPIN, INPUT);
 
-  hz = 500;                                                     //initialize square wave frequency at 500hz
+  hz = 500.0;                                                     //initialize square wave frequency at 500hz
 
   startTime = millis();
   delay(1000);
@@ -89,26 +90,26 @@ void loop() {
 
   if(i < 20){
     plantReadingArray[0][i] = hz;
-    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
+    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN, PULSEREADPIN, PLANTREADPIN);
 
     i = i + 1;
-    hz = hz + 500;
+    hz = hz + 500.0;
 
   }
 if(i == 20){
   for (j=0;j<=20;j++) {
     Serial.printf("frequency: %i    plant reading: %i\n", plantReadingArray[j][0], plantReadingArray[j][1]);
     //uncomment to write to SD instead of Serial Monitor
-    //Serial.print("x");
-    //file.printf("%i , %i \n", plantReadingArray[j][0], plantReadingArray[j][1]);  //print timestamp and random number to file
-    //delay(50);
+    Serial.print("x");
+    file.printf("%f , %f\n", plantReadingArray[j][0], plantReadingArray[j][1]);  //print frequency and measurement to file on SD
+    delay(50);
   }
 
   if(j == 20){
     i = 0;
     file.close();
     Serial.printf("\nDone \n");
-    hz  = 500;                                                    //reset frequency to 500hz for next round
+    hz  = 500.0;                                                    //reset frequency to 500hz for next round
     delay(500);
   }
 }
@@ -117,24 +118,56 @@ if(i == 20){
 }
 
 //Read impedence values from the plant at current frequency for 1 second
-int plantImpRead(int _hz, int _i, int _PULSEPIN){
-  int i = 0;
-  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
-
+float plantImpRead(float _hz, int _i, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN){
+  float j;
+  int _startTime;
+  float _plantReading, _pulseReading, _plantImp, _avgPlantImp, _totalPlantImp, _min, _max;
+  static float _maxAt500, _minAt500;
+  
   _startTime = millis();
-  _totalPlantReading = 0;
+  _totalPlantImp = 0.0;
+  j = 0.0;
+  _min = 4096;
+  _max = 0;
 
   while(millis() - _startTime <= 1000){
     analogWrite(_PULSEPIN, 127, _hz);
-    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
-    i = i+1;
+    _pulseReading = analogRead(_PULSEREADPIN);
+    _plantReading = analogRead(_PLANTREADPIN);
 
-    _totalPlantReading = _totalPlantReading + _plantReading;
+    _plantImp = _plantReading / _pulseReading;
 
+    if(_plantReading < _min){
+      _min = plantReading;
+    }
+
+    if(_plantReading > _max){
+      _max = _plantReading;
+    }
+
+    j = j + 1.0;
+    //_totalPlantImp = (_totalPlantImp + _plantImp);
+    
   }
 
-  _avgPlantReading = _totalPlantReading / i;
+  //this statement lets us normalize the data for EZ plotting in excel
+  if(_hz == 500.0){
+    _maxAt500 = _max; 
+    _minAt500 = _min;
+  }
 
-  return _avgPlantReading;
+  Serial.printf("first max: %f\nnew max: %f\n", _maxAt500, _max);
+
+  _max = (_max / _maxAt500);
+  //_min = (_min / _minAt500 );
+  //_avgPlantImp = _max - _min;
+
+  //_avgPlantImp = (_totalPlantImp / j);
+  Serial.printf("hz: %f\n", _hz);
+  Serial.printf("max: %f\n\n", _max);
+  Serial.printf("min: %f\n", _min);
+  
+
+  return _max;
 
 }

@@ -20,13 +20,14 @@ Adafruit_MQTT_Publish plantFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/fe
 int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
 const int PULSEPIN = A1;
-const int PLANTREADPIN = A2;
+const int PULSEREADPIN = A2;
+const int PLANTREADPIN = A3;
 int i = 0;
 int hz, startTime;
-int plantReading, previousPlantReading, plantReadingOutput;
-float plantReadingArray [20][2];
+float firstMax, maxPlantReading, slope, plant01Max, plant01Slope, plant02Max, plant02Slope;
+float plantReadArray [20][2];
 
-int plantImpRead(int _hz, int _i, int _PULSEPIN);
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
 
 SYSTEM_MODE(AUTOMATIC);
 
@@ -51,45 +52,63 @@ void setup() {
 
 void loop() {
 
-
-  //Added the impedence reading code in case I also want Boron taking readings
-  if(i<20){
-
-    plantReadingArray[0][i] = hz;
-    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
-
-    i = i + 1;
-    hz = hz + 500;
-  }
-
-  if(i == 20){
-    //parse data received
-
-    //publish data to cloud
-    i = 0;
-    sleepULP();
-  }
-
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
     String parse0 = Serial1.readStringUntil('=');  //+RCV
     String parse1 = Serial1.readStringUntil(',');  // address received from
     String parse2 = Serial1.readStringUntil(',');  // buffer length
-    String parse3 = Serial1.readStringUntil(',');  // "plantData"
-    String parse4 = Serial1.readStringUntil(',');  // rssi
-    String parse5 = Serial1.readStringUntil('\n'); // snr
-    //String parse6 = Serial1.readString();          // extra
+    String parse3 = Serial1.readStringUntil(',');  // Plant01Max
+    String parse4 = Serial1.readStringUntil(',');  // Plant01Slope
+    String parse5 = Serial1.readStringUntil(',');  // Plant02Max
+    String parse6 = Serial1.readStringUntil(',');  // Plant02Slope
+    String parse7 = Serial1.readStringUntil(',');  // rssi
+    String parse8 = Serial1.readStringUntil('\n'); // snr
+    //String parse9 = Serial1.readString();          // extra
 
-    Serial.printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", parse0.c_str(), parse1.c_str(), parse2.c_str(), parse3.c_str(), parse4.c_str(), parse5.c_str());
-    plantReading = strtol(parse3.c_str(),NULL,10);
-    Serial.printf("Data received as int: %i\n", plantReading);
+    Serial.printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", parse0.c_str(), parse1.c_str(), parse2.c_str(), parse3.c_str(), parse4.c_str(), parse5.c_str(), parse6.c_str(), parse7.c_str(), parse8.c_str());
+    plant01Max = strtof(parse3.c_str(),NULL);
+    plant01Slope = strtof(parse4.c_str(),NULL);
+    plant02Max = strtof(parse5.c_str(),NULL);
+    plant02Slope = strtof(parse6.c_str(),NULL);
+
+    Serial.printf("Data received as int: %f\n", plant01Max);
+
+    //prepare to take readings
+    i = 0; 
 
   }
 
+  if(i < 20){
+    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
 
-if(millis()-startTime > 30000){
+    if(hz == 500.0){
+      firstMax = maxPlantReading;
+    }
+    
+    //store raw values in 0 and normalized values in 1
+    plantReadArray[i][0] = maxPlantReading;
+    plantReadArray[i][1] = (maxPlantReading/firstMax);
+
+    i = i + 1;
+    hz = hz + 500;
+
+  }
+
+  if(i == 20){
+    //calculate slope
+    slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
+
+    //send argon #, slope, and Max value
+
+    //lock out of both if statements until next time it's time to get data
+    i = 21;
+
+  }
+
+//publish to cloud every five minutes
+if(millis()-startTime > 300000){
+  //need to decide how data will be sent to cloud for easy parsing
   MQTT_connect();
-  plantFeed.publish(plantReading);
-  Serial.printf("input: %i\n", plantReading);
+  //plantFeed.publish(plantReading);
   startTime = millis();
 }
 
@@ -97,35 +116,37 @@ if(millis()-startTime > 30000){
 }
 
 //Read impedence values from the plant at current frequency for 1 second
-int plantImpRead(int _hz, int _i, int _PULSEPIN){
-  int i = 0;
-  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
-
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+  int _startTime;
+  float _plantReading, _pulseReading, _plantImp, _min, _max;
+  
   _startTime = millis();
-  _totalPlantReading = 0;
+  _min = 4096;
+  _max = 0;
 
   while(millis() - _startTime <= 1000){
     analogWrite(_PULSEPIN, 127, _hz);
-    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
-    i = i+1;
+    _pulseReading = analogRead(_PULSEREADPIN);
+    _plantReading = analogRead(_PLANTREADPIN);
 
-    _totalPlantReading = _totalPlantReading + _plantReading;
+    _plantImp = (_plantReading / _pulseReading);
+
+    if(_plantImp < _min){
+      _min = _plantImp;
+    }
+
+    if(_plantImp > _max){
+      _max = _plantImp;
+    }
 
   }
 
-  _avgPlantReading = _totalPlantReading / i;
-
-  return _avgPlantReading;
-
-}
-
-//Sleep until Argon receives data over Serial1 (LoRa)
-void sleepULP(){
-  SystemSleepConfiguration config;
-  config.mode(SystemSleepMode::ULTRA_LOW_POWER).usart(Serial1);
-  SystemSleepResult result = System.sleep(config);
+  *_maxPlantReading = _max;
+  //not currently returning min, but could if it becomes interesting
 
 }
+
+
 
 // Function to connect and reconnect as necessary to the MQTT server.
 void MQTT_connect() {
@@ -136,15 +157,15 @@ void MQTT_connect() {
     return;
   }
  
-  Serial.print("Connecting to MQTT... ");
+  //Serial.print("Connecting to MQTT... ");
  
   while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
-       Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
-       Serial.printf("Retrying MQTT connection in 5 seconds...\n");
+       //Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
+       //Serial.printf("Retrying MQTT connection in 5 seconds...\n");
        mqtt.disconnect();
        delay(5000);  // wait 5 seconds and try again
   }
-  Serial.printf("MQTT Connected!\n");
+  //Serial.printf("MQTT Connected!\n");
 }
 
 bool MQTT_ping() {
@@ -252,3 +273,11 @@ void reyaxSetup(String password) {
     Serial.printf("Radio Password: %s\n", reply.c_str());
   }
 }
+
+//Sleep until Boron receives data over Serial1 (LoRa)
+// void sleepULP(){
+//   SystemSleepConfiguration config;
+//   config.mode(SystemSleepMode::ULTRA_LOW_POWER).usart(Serial1);
+//   SystemSleepResult result = System.sleep(config);
+
+// }

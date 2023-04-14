@@ -4,5 +4,6 @@
     "files.associations": {
         "*.ino": "cpp"
     },
-    "particle.targetPlatform": "boron"
+    "particle.targetPlatform": "boron",
+    "cmake.configureOnOpen": false
 }

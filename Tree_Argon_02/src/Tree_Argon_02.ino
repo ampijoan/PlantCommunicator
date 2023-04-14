@@ -9,15 +9,15 @@
 
 int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
-
 const int PULSEPIN = A1;
-const int PLANTREADPIN = A2;
+const int PULSEREADPIN = A2;
+const int PLANTREADPIN = A3;
 int i = 0;
 int hz, startTime;
-int plantReading, previousPlantReading, plantReadingOutput;
-int plantReadingArray [20][2];
+float firstMax, maxPlantReading, slope, plant01Slope, plant01Max;
+float plantReadArray [20][2];
 
-int plantImpRead(int _hz, int _i);
+void plantImpRead(int _hz, int _PULSEPIN, int _PLANTREADPIN, float *_maxPlantReading);
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
@@ -42,80 +42,95 @@ void setup() {
 
 void loop() {
 
+
+  //when there's incoming LoRa data, parse the data and then get ready to take data
   if (Serial1.available())  { // full incoming buffer: +RCV=203,50,35.08,9,-36,41
     String parse0 = Serial1.readStringUntil('=');  //+RCV
     String parse1 = Serial1.readStringUntil(',');  // address received from
     String parse2 = Serial1.readStringUntil(',');  // buffer length
-    String parse3 = Serial1.readStringUntil(',');  // "plantData"
-                                                  //additional data here
-    String parse4 = Serial1.readStringUntil(',');  // rssi
-    String parse5 = Serial1.readStringUntil('\n'); // snr
+    String parse3 = Serial1.readStringUntil(',');  // max value from plant 01
+    String parse4 = Serial1.readStringUntil(','); // slope from plant 01
+    String parse5 = Serial1.readStringUntil(',');  // rssi
+    String parse6 = Serial1.readStringUntil('\n'); // snr
     //String parse6 = Serial1.readString();          // extra
 
-    Serial.printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", parse0.c_str(), parse1.c_str(), parse2.c_str(), parse3.c_str(), parse4.c_str(), parse5.c_str());
-    plantReading = strtol(parse3.c_str(),NULL,10);
-    Serial.printf("Data received as int: %i\n", plantReading);
+    Serial.printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n", parse0.c_str(), parse1.c_str(), parse2.c_str(), parse3.c_str(), parse4.c_str(), parse5.c_str(), parse6.c_str());
+    plant01Max = strtof(parse3.c_str(),NULL);
+    plant01Slope = strtof(parse4.c_str(),NULL);
+    Serial.printf("PLant 01 Max: %f\n", plant01Max);
+    Serial.printf("Plant 01 slope: %f\n", plant01Slope);
+
+    //set counter to zero to start taking data after receiving data
+    i = 0;
 
   }
 
 
   if(i < 20){
-    
-    plantReadingArray[0][i] = hz;
-    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
+
+    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
+
+    if(hz == 500.0){
+      firstMax = maxPlantReading;
+    }
+    //store raw values in 0 and normalized values in 1
+    plantReadArray[i][0] = maxPlantReading;
+    plantReadArray[i][1] = (maxPlantReading/firstMax);
 
     i = i + 1;
     hz = hz + 500;
+
   }
 
   if(i == 20){
+    //calculate slope
+    slope = (10000-500)/(plantReadArray[0][0] - plantReadArray[19][0]);
 
-    //parse out array here and decide what to send.
+    //send previous plant data and new plant data
+    sendData(myName, plant01Max, plant01Slope, maxPlantReading, slope);
 
-    //send data
-    i = 0;
-    sleepULP();
+    //lock out of both if statements until next time it's time to get data
+    i = 21;
 
   }
-
 
 }
 
 //Read impedence values from the plant at current frequency for 1 second
-int plantImpRead(int _hz, int _i, int _PULSEPIN){
-  int i = 0;
-  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
-
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+  int _startTime;
+  float _plantReading, _pulseReading, _plantImp, _min, _max;
+  
   _startTime = millis();
-  _totalPlantReading = 0;
+  _min = 4096;
+  _max = 0;
 
   while(millis() - _startTime <= 1000){
     analogWrite(_PULSEPIN, 127, _hz);
-    _plantReading = random(0, 10000);     //analogRead(PLANTREADPIN);
-    i = i+1;
+    _pulseReading = analogRead(_PULSEREADPIN);
+    _plantReading = analogRead(_PLANTREADPIN);
 
-    _totalPlantReading = _totalPlantReading + _plantReading;
+    _plantImp = (_plantReading / _pulseReading);
+
+    if(_plantImp < _min){
+      _min = _plantImp;
+    }
+
+    if(_plantImp > _max){
+      _max = _plantImp;
+    }
 
   }
 
-  _avgPlantReading = _totalPlantReading / i;
-
-  return _avgPlantReading;
-
-}
-
-//Sleep until Argon receives data over Serial1 (LoRa)
-void sleepULP(){
-  SystemSleepConfiguration config;
-  config.mode(SystemSleepMode::ULTRA_LOW_POWER).usart(Serial1);
-  SystemSleepResult result = System.sleep(config);
+  *_maxPlantReading = _max;
+  //not currently returning min, but could if it becomes interesting
 
 }
 
 //Send data with LoRa module
-void sendData(String name, int plantReading) {
+void sendData(String name, float plant01Max, float plant01Slope, float maxPlantReading, float slope) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i,%s\r\n", SENDADDRESS, plantReading, name.c_str());
+  sprintf(buffer, "AT+SEND=%i,60,%f,%f,%f,%f,%s\r\n", SENDADDRESS, plant01Max, plant01Slope, maxPlantReading, slope, name.c_str());
   Serial1.printf("%s",buffer);
   //Serial1.println(buffer); 
   delay(1000);
@@ -201,3 +216,11 @@ void reyaxSetup(String password) {
     Serial.printf("Radio Password: %s\n", reply.c_str());
   }
 }
+
+//If you want sleep -- sleep until Argon receives data over Serial1 (LoRa)
+// void sleepULP(){
+//   SystemSleepConfiguration config;
+//   config.mode(SystemSleepMode::ULTRA_LOW_POWER).usart(Serial1);
+//   SystemSleepResult result = System.sleep(config);
+
+// }

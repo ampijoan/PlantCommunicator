@@ -107,7 +107,7 @@ float plantImpRead(float _hz, int _i, int _PULSEPIN, int _PULSEREADPIN, int _PLA
   //_avgPlantImp = (_totalPlantImp / j);
   Serial.printf("hz: %f\n", _hz);
   Serial.printf("max: %f\n\n", _max);
-  Serial.printf("min: %f\n", _min);
+  //Serial.printf("min: %f\n", _min);
   
 
   return _max;

@@ -15,19 +15,20 @@
 
 void setup();
 void loop();
-void sleepULP();
-void sendData(String name, int plantReading);
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
+void sendData(String name, float maxPlantReading, float slope);
 void reyaxSetup(String password);
 #line 10 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Tree_Argon_01/src/Tree_Argon_01.ino"
 int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
 const int PULSEPIN = A1;
-const int PLANTREADPIN = A2;
+const int PULSEREADPIN = A2;
+const int PLANTREADPIN = A3;
 const int sleepDuration = 60000;
 int i = 0;
 int hz, startTime;
-int plantReading;
-int plantReadingArray [20][2];
+float firstMax, maxPlantReading, slope;
+int plantReadArray [20][2];
 
 int plantImpRead(int _hz, int _i, int _PULSEPIN);
 
@@ -35,32 +36,42 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 
 void setup() {
 
-  Serial.begin(9600);
- 
-  waitFor(Serial.isConnected,10000);
-  delay(3000);
+  //Serial.begin(9600);
+  //waitFor(Serial.isConnected,10000);
+  //delay(3000);
 
+  //LoRa setup
   Serial1.begin(115200);
   delay(1000);
   reyaxSetup(password);
+  SENDADDRESS = 0xA2;
 
+  //PinModes
   pinMode(PULSEPIN, OUTPUT);
   pinMode(PLANTREADPIN, INPUT);
 
-  hz = 500; //initialize wave frequency at 500hz
-
-  SENDADDRESS = 0xA2;
-
+  //initialize values
+  hz = 500;
   startTime = millis();
 
 }
 
 void loop() {
-  //if statement to set i back to 0, for example on wake up.
+
+  //set i back to 0 and start taking samples every minute
+  if(millis() - startTime >= 60000){
+    i = 0;
+  }
 
   if(i < 20){
-    plantReadingArray[0][i] = hz;
-    plantReadingArray[1][i] = plantImpRead(hz, i, PULSEPIN);
+    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
+
+    if(hz == 500.0){
+      firstMax = maxPlantReading;
+    }
+    //store raw values in 0 and normalized values in 1
+    plantReadArray[i][0] = maxPlantReading;
+    plantReadArray[i][1] = (maxPlantReading/firstMax);
 
     i = i + 1;
     hz = hz + 500;
@@ -68,54 +79,54 @@ void loop() {
   }
 
   if(i == 20){
-  //parse out array here and decide what to send.
+    //calculate slope
+    slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
 
-  //send data here
+    //send argon #, slope, and Max value
+    sendData(myName, maxPlantReading, slope);
 
-    i = 0; //reset counter and go to sleep for sleepDuration (currently one minute)
-    //sleepULP();
+    //lock out of both if statements until next time it's time to get data
+    i = 21;
 
   }
 
 }
 
 //Read impedence values from the plant at current frequency for 1 second
-int plantImpRead(int _hz, int _i, int _PULSEPIN){
-  int i = 0;
-  int _plantReading, _avgPlantReading, _totalPlantReading, _startTime;
-
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+  int _startTime;
+  float _plantReading, _pulseReading, _plantImp, _min, _max;
+  
   _startTime = millis();
-  _totalPlantReading = 0;
+  _min = 4096;
+  _max = 0;
 
   while(millis() - _startTime <= 1000){
     analogWrite(_PULSEPIN, 127, _hz);
-    _plantReading = analogRead(PLANTREADPIN);
-    i = i+1;
+    _pulseReading = analogRead(_PULSEREADPIN);
+    _plantReading = analogRead(_PLANTREADPIN);
 
-    _totalPlantReading = _totalPlantReading + _plantReading;
+    _plantImp = (_plantReading / _pulseReading);
 
-    Serial.printf("%i\n", _plantReading);
+    if(_plantImp < _min){
+      _min = _plantImp;
+    }
+
+    if(_plantImp > _max){
+      _max = _plantImp;
+    }
 
   }
 
-  _avgPlantReading = _totalPlantReading / i;
-
-  return _avgPlantReading;
-
-}
-
-// sleep in ulta low power mode until it's time to take a reading
-void sleepULP(){
-  SystemSleepConfiguration config;
-  config.mode(SystemSleepMode::ULTRA_LOW_POWER).duration(sleepDuration);
-  SystemSleepResult result = System.sleep(config);
+  *_maxPlantReading = _max;
+  //not currently returning min, but could if it becomes interesting
 
 }
 
 //Send data with LoRa module
-void sendData(String name, int plantReading) {
+void sendData(String name, float maxPlantReading, float slope) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i,%s\r\n", SENDADDRESS, plantReading, name.c_str());
+  sprintf(buffer, "AT+SEND=%i,60,%f, %f, %s\r\n", SENDADDRESS, maxPlantReading, slope, name.c_str());
   Serial1.printf("%s",buffer);
   Serial.printf("%s",buffer);
   //Serial1.println(buffer); 
@@ -202,3 +213,10 @@ void reyaxSetup(String password) {
     Serial.printf("Radio Password: %s\n", reply.c_str());
   }
 }
+
+// If you want to add a sleep function, this will sleep in ulta low power mode
+// void sleepULP(){
+//   SystemSleepConfiguration config;
+//   config.mode(SystemSleepMode::ULTRA_LOW_POWER).duration(sleepDuration);
+//   SystemSleepResult result = System.sleep(config);
+//}
