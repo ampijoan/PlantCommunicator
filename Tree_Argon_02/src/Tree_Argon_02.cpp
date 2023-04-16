@@ -24,7 +24,7 @@ int SENDADDRESS;   // address of radio to be sent to. Set depending on where you
 const int PULSEPIN = A1;
 const int PULSEREADPIN = A2;
 const int PLANTREADPIN = A3;
-int i = 0;
+int i;
 int hz, startTime;
 float firstMax, maxPlantReading, slope, plant01Slope, plant01Max;
 float plantReadArray [20][2];
@@ -42,6 +42,7 @@ void setup() {
   reyaxSetup(password);
 
   pinMode(PULSEPIN, OUTPUT);
+  pinMode(PULSEREADPIN, INPUT);
   pinMode(PLANTREADPIN, INPUT);
 
   hz = 500; //initialize wave frequency at 500hz
@@ -49,6 +50,7 @@ void setup() {
   SENDADDRESS = 0xA3;
 
   startTime = millis();
+  i = 21; //wait until we receive data from other microcontrollers to start doing things
 
 }
 
@@ -64,12 +66,12 @@ void loop() {
     String parse4 = Serial1.readStringUntil(','); // slope from plant 01
     String parse5 = Serial1.readStringUntil(',');  // rssi
     String parse6 = Serial1.readStringUntil('\n'); // snr
-    //String parse6 = Serial1.readString();          // extra
+    String parse7 = Serial1.readString();          // extra
 
-    Serial.printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n", parse0.c_str(), parse1.c_str(), parse2.c_str(), parse3.c_str(), parse4.c_str(), parse5.c_str(), parse6.c_str());
+    Serial.printf("%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", parse0.c_str(), parse1.c_str(), parse2.c_str(), parse3.c_str(), parse4.c_str(), parse5.c_str(), parse6.c_str(), parse7.c_str());
     plant01Max = strtof(parse3.c_str(),NULL);
     plant01Slope = strtof(parse4.c_str(),NULL);
-    Serial.printf("PLant 01 Max: %f\n", plant01Max);
+    Serial.printf("Plant 01 Max: %f\n", plant01Max);
     Serial.printf("Plant 01 slope: %f\n", plant01Slope);
 
     //set counter to zero to start taking data after receiving data
@@ -90,14 +92,14 @@ void loop() {
     plantReadArray[i][1] = (maxPlantReading/firstMax);
 
     i = i + 1;
-    hz = hz + 500;
+    hz = hz + 500.0;
 
   }
 
   if(i == 20){
     //calculate slope
     slope = (10000-500)/(plantReadArray[0][0] - plantReadArray[19][0]);
-
+    Serial.printf("max: %f\nslope: %f\nreceived max: %f\nreceived slope: %f\n", maxPlantReading, slope, plant01Max, plant01Slope);
     //send previous plant data and new plant data
     sendData(myName, plant01Max, plant01Slope, maxPlantReading, slope);
 
@@ -122,16 +124,17 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    _plantImp = (_plantReading / _pulseReading);
+    if(_pulseReading != 0.0){
+      _plantImp = (_plantReading / _pulseReading);
 
-    if(_plantImp < _min){
-      _min = _plantImp;
+      if(_plantImp < _min){
+        _min = _plantImp;
+      }
+
+      if(_plantImp > _max){
+        _max = _plantImp;
+      }
     }
-
-    if(_plantImp > _max){
-      _max = _plantImp;
-    }
-
   }
 
   *_maxPlantReading = _max;

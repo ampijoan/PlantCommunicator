@@ -18,13 +18,13 @@ int hz, startTime;
 float firstMax, maxPlantReading, slope;
 int plantReadArray [20][2];
 
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *maxPlantReading);
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
 void setup() {
 
-  //Serial.begin(9600);
+  Serial.begin(9600);
   //waitFor(Serial.isConnected,10000);
   //delay(3000);
 
@@ -49,6 +49,8 @@ void loop() {
   //set i back to 0 and start taking samples every minute
   if(millis() - startTime >= 60000){
     i = 0;
+
+    startTime = millis();
   }
 
   if(i < 20){
@@ -57,13 +59,13 @@ void loop() {
     if(hz == 500.0){
       firstMax = maxPlantReading;
     }
-    
+
     //store raw values in 0 and normalized values in 1
     plantReadArray[i][0] = maxPlantReading;
     plantReadArray[i][1] = (maxPlantReading/firstMax);
 
     i = i + 1;
-    hz = hz + 500;
+    hz = hz + 500.0;
 
   }
 
@@ -71,7 +73,7 @@ void loop() {
     //calculate slope
     slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
 
-    //send argon #, slope, and Max value
+    //send argon name, slope, and Max value
     sendData(myName, maxPlantReading, slope);
 
     //lock out of both if statements until next time it's time to get data
@@ -95,18 +97,21 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    _plantImp = (_plantReading / _pulseReading);
+    //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
+    if(_pulseReading != 0.0){
+      _plantImp = (_plantReading / _pulseReading);
 
-    if(_plantImp < _min){
-      _min = _plantImp;
+      if(_plantImp < _min){
+        _min = _plantImp;
+      }
+
+      if(_plantImp > _max){
+        _max = _plantImp;
+      }
+    }
     }
 
-    if(_plantImp > _max){
-      _max = _plantImp;
-    }
-
-  }
-
+  Serial.printf("max: %f\n", _max);
   *_maxPlantReading = _max;
   //not currently returning min, but could if it becomes interesting
 
@@ -115,7 +120,7 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
 //Send data with LoRa module
 void sendData(String name, float maxPlantReading, float slope) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%f, %f, %s\r\n", SENDADDRESS, maxPlantReading, slope, name.c_str());
+  sprintf(buffer, "AT+SEND=%i, 60, %f, %f, %s\r\n", SENDADDRESS, maxPlantReading, slope, name.c_str());
   Serial1.printf("%s",buffer);
   Serial.printf("%s",buffer);
   //Serial1.println(buffer); 

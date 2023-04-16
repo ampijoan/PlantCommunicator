@@ -15,14 +15,19 @@ TCPClient TheClient;
 
 Adafruit_MQTT_SPARK mqtt(&TheClient, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
 
-Adafruit_MQTT_Publish plantFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantData");
+Adafruit_MQTT_Publish plant01M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant01Max");
+Adafruit_MQTT_Publish plant01S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant01Slope");
+Adafruit_MQTT_Publish plant02M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant02Max");
+Adafruit_MQTT_Publish plant02S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant02Slope");
+Adafruit_MQTT_Publish plant03M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Max");
+Adafruit_MQTT_Publish plant03S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
 
 int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
 const int PULSEPIN = A1;
 const int PULSEREADPIN = A2;
 const int PLANTREADPIN = A3;
-int i = 0;
+int i;
 int hz, startTime;
 float firstMax, maxPlantReading, slope, plant01Max, plant01Slope, plant02Max, plant02Slope;
 float plantReadArray [20][2];
@@ -40,13 +45,13 @@ void setup() {
   reyaxSetup(password);
 
   pinMode(PULSEPIN, OUTPUT);
+  pinMode(PULSEREADPIN, INPUT);
   pinMode(PLANTREADPIN, INPUT);
 
   hz = 500; //initialize wave frequency at 500hz
-
   SENDADDRESS = 0;
-
   startTime = millis();
+  i = 21; //wait until we receive data from other microcontrollers to start doing things
 
 }
 
@@ -83,34 +88,40 @@ void loop() {
     if(hz == 500.0){
       firstMax = maxPlantReading;
     }
-    
+
     //store raw values in 0 and normalized values in 1
     plantReadArray[i][0] = maxPlantReading;
     plantReadArray[i][1] = (maxPlantReading/firstMax);
 
     i = i + 1;
-    hz = hz + 500;
+    hz = hz + 500.0;
 
   }
+
+  MQTT_connect();
+  MQTT_ping();
 
   if(i == 20){
     //calculate slope
     slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
 
     //send argon #, slope, and Max value
+    plant01M.publish(plant01Max);
+    delay(50);
+    plant01S.publish(plant01Slope);
+    delay(50);
+    plant02M.publish(plant02Max);
+    delay(50);
+    plant02S.publish(plant02Slope);
+    delay(50);
+    plant03M.publish(maxPlantReading);
+    delay(50);
+    plant03S.publish(slope);
 
     //lock out of both if statements until next time it's time to get data
     i = 21;
 
   }
-
-//publish to cloud every five minutes
-if(millis()-startTime > 300000){
-  //need to decide how data will be sent to cloud for easy parsing
-  MQTT_connect();
-  //plantFeed.publish(plantReading);
-  startTime = millis();
-}
 
 
 }
@@ -129,16 +140,17 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    _plantImp = (_plantReading / _pulseReading);
+    if(_pulseReading != 0.0){
+      _plantImp = (_plantReading / _pulseReading);
 
-    if(_plantImp < _min){
-      _min = _plantImp;
+      if(_plantImp < _min){
+        _min = _plantImp;
+      }
+
+      if(_plantImp > _max){
+        _max = _plantImp;
+      }
     }
-
-    if(_plantImp > _max){
-      _max = _plantImp;
-    }
-
   }
 
   *_maxPlantReading = _max;

@@ -28,7 +28,12 @@ TCPClient TheClient;
 
 Adafruit_MQTT_SPARK mqtt(&TheClient, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
 
-Adafruit_MQTT_Publish plantFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plantData");
+Adafruit_MQTT_Publish plant01M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant01Max");
+Adafruit_MQTT_Publish plant01S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant01Slope");
+Adafruit_MQTT_Publish plant02M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant02Max");
+Adafruit_MQTT_Publish plant02S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant02Slope");
+Adafruit_MQTT_Publish plant03M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Max");
+Adafruit_MQTT_Publish plant03S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
 
 int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
@@ -96,13 +101,13 @@ void loop() {
     if(hz == 500.0){
       firstMax = maxPlantReading;
     }
-    
+
     //store raw values in 0 and normalized values in 1
     plantReadArray[i][0] = maxPlantReading;
     plantReadArray[i][1] = (maxPlantReading/firstMax);
 
     i = i + 1;
-    hz = hz + 500;
+    hz = hz + 500.0;
 
   }
 
@@ -111,19 +116,23 @@ void loop() {
     slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
 
     //send argon #, slope, and Max value
+    MQTT_connect();
+    plant01M.publish(plant01Max);
+    delay(50);
+    plant01S.publish(plant01Slope);
+    delay(50);
+    plant02M.publish(plant02Max);
+    delay(50);
+    plant02S.publish(plant02Slope);
+    delay(50);
+    plant03M.publish(maxPlantReading);
+    delay(50);
+    plant03S.publish(slope);
 
     //lock out of both if statements until next time it's time to get data
     i = 21;
 
   }
-
-//publish to cloud every five minutes
-if(millis()-startTime > 300000){
-  //need to decide how data will be sent to cloud for easy parsing
-  MQTT_connect();
-  //plantFeed.publish(plantReading);
-  startTime = millis();
-}
 
 
 }
