@@ -15,7 +15,7 @@
 
 void setup();
 void loop();
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
+float plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN);
 void sendData(String name, float maxPlantReading, float slope);
 void reyaxSetup(String password);
 #line 10 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Tree_Argon_01/src/Tree_Argon_01.ino"
@@ -66,7 +66,7 @@ void loop() {
   }
 
   if(i < 20){
-    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
+    maxPlantReading = plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN);
 
     if(hz == 500.0){
       firstMax = maxPlantReading;
@@ -96,9 +96,11 @@ void loop() {
 }
 
 //Read impedence values from the plant at current frequency for 1 second
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+float plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN){
+  float j;
   int _startTime;
-  float _plantReading, _pulseReading, _min, _max;
+  float _plantReading, _pulseReading, _plantImp, _avgPlantImp, _totalPlantImp, _min, _max;
+  static float _maxAt500, _minAt500;
   
   _startTime = millis();
   _min = 4096;
@@ -109,27 +111,28 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
+    _plantImp = _plantReading / _pulseReading;
 
-      if(_plantReading < _min){
-        _min = _plantReading;
-      }
-
-      if(_plantReading > _max){
-        _max = _plantReading;
-      }
+    if(_plantReading < _min){
+      _min = _plantReading;
     }
 
-  Serial.printf("max: %f\n", _max);
-  *_maxPlantReading = _max;
-  //not currently returning min, but could if it becomes interesting
+    if(_plantReading > _max){
+      _max = _plantReading;
+    }
+    
+  }
+
+  Serial.printf("first max: %f\nnew max: %f\n", _maxAt500, _max);
+ 
+  return _max;
 
 }
 
 //Send data with LoRa module
 void sendData(String name, float maxPlantReading, float slope) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i, 60, %f, %f, %s\r\n", SENDADDRESS, maxPlantReading, slope, name.c_str());
+  sprintf(buffer, "AT+SEND=%i, 60, %.2f, %.2f, %s\r\n", SENDADDRESS, maxPlantReading, slope, name.c_str());
   Serial1.printf("%s",buffer);
   Serial.printf("%s",buffer);
   //Serial1.println(buffer); 
