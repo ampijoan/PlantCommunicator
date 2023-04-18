@@ -36,7 +36,7 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 void setup() {
 
   Serial.begin(9600);
-  waitFor(Serial.isConnected, 10000);
+  //waitFor(Serial.isConnected, 10000);
 
   Serial1.begin(115200);
   reyaxSetup(password);
@@ -113,7 +113,7 @@ void loop() {
 //Read impedence values from the plant at current frequency for 1 second
 void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
   int _startTime;
-  float _plantReading, _pulseReading, _plantImp, _min, _max;
+  float _plantReading, _pulseReading, _min, _max;
   
   _startTime = millis();
   _min = 4096;
@@ -124,19 +124,18 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    if(_pulseReading != 0.0){
-      _plantImp = (_plantReading / _pulseReading);
+    //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
 
-      if(_plantImp < _min){
-        _min = _plantImp;
+      if(_plantReading < _min){
+        _min = _plantReading;
       }
 
-      if(_plantImp > _max){
-        _max = _plantImp;
+      if(_plantReading > _max){
+        _max = _plantReading;
       }
     }
-  }
 
+  Serial.printf("max: %f\n", _max);
   *_maxPlantReading = _max;
   //not currently returning min, but could if it becomes interesting
 
@@ -145,7 +144,7 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
 //Send data with LoRa module
 void sendData(String name, float plant01Max, float plant01Slope, float maxPlantReading, float slope) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%f,%f,%f,%f,%s\r\n", SENDADDRESS, plant01Max, plant01Slope, maxPlantReading, slope, name.c_str());
+  sprintf(buffer, "AT+SEND=%i,60,%.1f,%.2f,%.1f,%.2f,%s\r\n", SENDADDRESS, plant01Max, plant01Slope, maxPlantReading, slope, name.c_str());
   Serial1.printf("%s",buffer);
   //Serial1.println(buffer); 
   delay(1000);

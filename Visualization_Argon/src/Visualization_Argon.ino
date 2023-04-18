@@ -12,12 +12,22 @@
 #include "credentials.h"
 
 //tags used to tell vis software which plant data it is receiving
+const int PULSEPIN = A1;
+const int PULSEREADPIN = A2;
+const int PLANTREADPIN = A3;
 const int plant01MaxTag = 9911;
 const int plant01SlopeTag = 9912;
 const int plant02MaxTag = 9921;
 const int plant02SlopeTag = 9922;
+const int plant03MaxTag = 9931;
+const int plant03SlopeTag = 9932;
 
 float plant01MaxRead, plant01SlopeRead, plant02MaxRead, plant02SlopeRead, plant03MaxRead, plant03SlopeRead;
+int plant01MaxInt, plant01SlopeInt, plant02MaxInt, plant02SlopeInt, plant03MaxInt, plant03SlopeInt;
+int i;
+int hz, startTime;
+float firstMax, maxPlantReading, slope, plant01Slope, plant01Max;
+float plantReadArray [20][2];
 
 TCPClient TheClient;
 
@@ -28,9 +38,10 @@ Adafruit_MQTT_Subscribe plant01M = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "
 Adafruit_MQTT_Subscribe plant01S = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant01Slope");
 Adafruit_MQTT_Subscribe plant02M = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant02Max");
 Adafruit_MQTT_Subscribe plant02S = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant02Slope");
-Adafruit_MQTT_Subscribe plant03M = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant03Max");
-Adafruit_MQTT_Subscribe plant03S = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
+// Adafruit_MQTT_Subscribe plant03M = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant03Max");
+// Adafruit_MQTT_Subscribe plant03S = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
 
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
 
 SYSTEM_MODE(AUTOMATIC);
 
@@ -38,13 +49,14 @@ void setup() {
   Serial.begin(9600);
   waitFor(Serial.isConnected, 10000);
 
-
   mqtt.subscribe(&plant01M);
   mqtt.subscribe(&plant01S);
   mqtt.subscribe(&plant02M);
   mqtt.subscribe(&plant02S);
-  mqtt.subscribe(&plant03M);
-  mqtt.subscribe(&plant01S);
+  // mqtt.subscribe(&plant03M);
+  // mqtt.subscribe(&plant03S);
+
+  i = 21;
 }
 
 void loop() {
@@ -71,27 +83,76 @@ void loop() {
       plant02SlopeRead = atof((char *)plant02S.lastread);
     }
 
-    if (subscription == &plant03M) {
-      plant03MaxRead = atof((char *)plant03M.lastread);
-    }
+  plant01SlopeInt = plant01SlopeRead *10;
+  plant02SlopeInt = plant02SlopeRead *10;
+  plant01MaxInt = plant01MaxRead;
+  plant02MaxInt = plant02MaxRead;
 
-    if (subscription == &plant03S) {
-      plant03SlopeRead = atof((char *)plant03S.lastread);
-    }
+  i = 0;
 
   }
 
-  //Maybe instead of delay, have it continuously print each set for a second, so if processing misses it the first time it's ok?
-  //could send a STOP code at the end??? OR just make Processing break out after second parse?
-  Serial.printf("%i\n%f\n", plant01Tag, plant01MaxRead);
-  Serial.printf("%i\n%f\n", plant01Tag, plant01SlopeRead);
-  Serial.printf("%i\n%f\n", plant02Tag, plant02MaxRead);
-  Serial.printf("%i\n%f\n", plant02Tag, plant02SlopeRead);
-  Serial.printf("%i\n%f\n", plant03Tag, plant03MaxRead);
-  Serial.printf("%i\n%f\n", plant03Tag, plant03SlopeRead);
+  if(i < 20){
+
+    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
+
+    if(hz == 500.0){
+      firstMax = maxPlantReading;
+    }
+    //store raw values in 0 and normalized values in 1
+    plantReadArray[i][0] = maxPlantReading;
+    plantReadArray[i][1] = (maxPlantReading/firstMax);
+
+    i = i + 1;
+    hz = hz + 500.0;
+
+  }
+
+  if(i == 20){
+    plant03MaxInt = plantReadArray[0][0];
+    plant03SlopeRead = (10000-500)/(plantReadArray[0][0] - plantReadArray[19][0]);
+    plant03SlopeInt = plant03SlopeRead * 10;
+    
+    Serial.printf("%i\n%i\n", plant01MaxTag, plant01MaxInt);
+    Serial.printf("%i\n%i\n", plant01SlopeTag, plant01SlopeInt);
+    Serial.printf("%i\n%i\n", plant02MaxTag, plant02MaxInt);
+    Serial.printf("%i\n%i\n", plant02SlopeTag, plant02SlopeInt);
+    Serial.printf("%i\n%i\n", plant03MaxTag, plant03MaxInt);
+    Serial.printf("%i\n%i\n", plant03SlopeTag, plant03SlopeInt);
+
+    i = 21;
+  }
+}
 
 
+//Read impedence values from the plant at current frequency for 1 second
+void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+  int _startTime;
+  float _plantReading, _pulseReading, _min, _max;
+  
+  _startTime = millis();
+  _min = 4096;
+  _max = 0;
 
+  while(millis() - _startTime <= 1000){
+    analogWrite(_PULSEPIN, 127, _hz);
+    _pulseReading = analogRead(_PULSEREADPIN);
+    _plantReading = analogRead(_PLANTREADPIN);
+
+    //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
+
+      if(_plantReading < _min){
+        _min = _plantReading;
+      }
+
+      if(_plantReading > _max){
+        _max = _plantReading;
+      }
+    }
+
+  //Serial.printf("max: %f\n", _max);
+  *_maxPlantReading = _max;
+  //not currently returning min, but could if it becomes interesting
 
 }
 
@@ -103,7 +164,7 @@ void MQTT_connect() {
     return;
   }
  
-  Serial.print("Connecting to MQTT... ");
+  //Serial.print("Connecting to MQTT... ");
  
   while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
        //Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
@@ -111,7 +172,7 @@ void MQTT_connect() {
        mqtt.disconnect();
        delay(5000);  // wait 5 seconds and try again
   }
-  Serial.printf("MQTT Connected!\n");
+  //Serial.printf("MQTT Connected!\n");
 }
 
 bool MQTT_ping() {

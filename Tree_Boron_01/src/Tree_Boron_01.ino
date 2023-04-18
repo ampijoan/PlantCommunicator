@@ -19,20 +19,14 @@ Adafruit_MQTT_Publish plant01M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/fee
 Adafruit_MQTT_Publish plant01S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant01Slope");
 Adafruit_MQTT_Publish plant02M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant02Max");
 Adafruit_MQTT_Publish plant02S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant02Slope");
-Adafruit_MQTT_Publish plant03M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Max");
-Adafruit_MQTT_Publish plant03S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
+// Adafruit_MQTT_Publish plant03M = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Max");
+// Adafruit_MQTT_Publish plant03S = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
 
 int SENDADDRESS;   // address of radio to be sent to. Set depending on where you want data to go.
 
-const int PULSEPIN = A1;
-const int PULSEREADPIN = A2;
-const int PLANTREADPIN = A3;
+float plant01Max, plant01Slope, plant02Max, plant02Slope;
 int i;
-int hz, startTime;
-float firstMax, maxPlantReading, slope, plant01Max, plant01Slope, plant02Max, plant02Slope;
-float plantReadArray [20][2];
 
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
 
 SYSTEM_MODE(AUTOMATIC);
 
@@ -44,14 +38,8 @@ void setup() {
   Serial1.begin(115200);
   reyaxSetup(password);
 
-  pinMode(PULSEPIN, OUTPUT);
-  pinMode(PULSEREADPIN, INPUT);
-  pinMode(PLANTREADPIN, INPUT);
-
-  hz = 500; //initialize wave frequency at 500hz
   SENDADDRESS = 0;
-  startTime = millis();
-  i = 21; //wait until we receive data from other microcontrollers to start doing things
+  i = 0;
 
 }
 
@@ -75,35 +63,16 @@ void loop() {
     plant02Max = strtof(parse5.c_str(),NULL);
     plant02Slope = strtof(parse6.c_str(),NULL);
 
-    Serial.printf("Data received as int: %f\n", plant01Max);
+    Serial.printf("plant 01 max: %f\nplant 01 slope: %f\nplant 02 max: %f\nplant 02 slope: %f\n", plant01Max, plant01Slope, plant02Max, plant02Slope);
 
-    //prepare to take readings
-    i = 0; 
-
-  }
-
-  if(i < 20){
-    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
-
-    if(hz == 500.0){
-      firstMax = maxPlantReading;
-    }
-
-    //store raw values in 0 and normalized values in 1
-    plantReadArray[i][0] = maxPlantReading;
-    plantReadArray[i][1] = (maxPlantReading/firstMax);
-
-    i = i + 1;
-    hz = hz + 500.0;
+    i = 1; 
 
   }
 
   MQTT_connect();
   MQTT_ping();
 
-  if(i == 20){
-    //calculate slope
-    slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
+  if(i == 1){
 
     //send argon #, slope, and Max value
     plant01M.publish(plant01Max);
@@ -114,50 +83,13 @@ void loop() {
     delay(50);
     plant02S.publish(plant02Slope);
     delay(50);
-    plant03M.publish(maxPlantReading);
-    delay(50);
-    plant03S.publish(slope);
 
-    //lock out of both if statements until next time it's time to get data
-    i = 21;
+    i = 0;
 
   }
 
 
 }
-
-//Read impedence values from the plant at current frequency for 1 second
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
-  int _startTime;
-  float _plantReading, _pulseReading, _plantImp, _min, _max;
-  
-  _startTime = millis();
-  _min = 4096;
-  _max = 0;
-
-  while(millis() - _startTime <= 1000){
-    analogWrite(_PULSEPIN, 127, _hz);
-    _pulseReading = analogRead(_PULSEREADPIN);
-    _plantReading = analogRead(_PLANTREADPIN);
-
-    if(_pulseReading != 0.0){
-      _plantImp = (_plantReading / _pulseReading);
-
-      if(_plantImp < _min){
-        _min = _plantImp;
-      }
-
-      if(_plantImp > _max){
-        _max = _plantImp;
-      }
-    }
-  }
-
-  *_maxPlantReading = _max;
-  //not currently returning min, but could if it becomes interesting
-
-}
-
 
 
 // Function to connect and reconnect as necessary to the MQTT server.
@@ -169,15 +101,15 @@ void MQTT_connect() {
     return;
   }
  
-  //Serial.print("Connecting to MQTT... ");
+  Serial.print("Connecting to MQTT... ");
  
   while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
-       //Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
-       //Serial.printf("Retrying MQTT connection in 5 seconds...\n");
+       Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
+       Serial.printf("Retrying MQTT connection in 5 seconds...\n");
        mqtt.disconnect();
        delay(5000);  // wait 5 seconds and try again
   }
-  //Serial.printf("MQTT Connected!\n");
+  Serial.printf("MQTT Connected!\n");
 }
 
 bool MQTT_ping() {
@@ -199,7 +131,7 @@ bool MQTT_ping() {
 //Send data with LoRa module
 void sendData(String name, int plantReading) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i,%s\r\n", SENDADDRESS, plantReading, name.c_str());
+  sprintf(buffer, "AT+SEND=%i,60,%.2f,%.2f,%s\r\n", SENDADDRESS, plantReading, name.c_str());
   Serial1.printf("%s",buffer);
   //Serial1.println(buffer); 
   delay(1000);

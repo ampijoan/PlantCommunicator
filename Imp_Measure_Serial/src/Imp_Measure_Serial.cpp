@@ -17,7 +17,7 @@ float plantImpRead(float _hz, int _i, int _PULSEPIN, int _PULSEREADPIN, int _PLA
 #line 8 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Imp_Measure_Serial/src/Imp_Measure_Serial.ino"
 const int PULSEPIN = A1;
 const int PULSEREADPIN = A2;
-const int PLANTREADPIN = A3;
+const int PLANTREADPIN = A4;
 int i, j, startTime;
 float hz;
 float plantReading, firstMax;

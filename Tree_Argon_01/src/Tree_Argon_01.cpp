@@ -38,7 +38,7 @@ void setup() {
 
   Serial.begin(9600);
   //waitFor(Serial.isConnected,10000);
-  //delay(3000);
+  delay(3000);
 
   //LoRa setup
   Serial1.begin(115200);
@@ -59,7 +59,7 @@ void setup() {
 void loop() {
 
   //set i back to 0 and start taking samples every minute
-  if(millis() - startTime >= 60000){
+  if(millis() - startTime >= 30000){
     i = 0;
 
     startTime = millis();
@@ -83,7 +83,7 @@ void loop() {
 
   if(i == 20){
     //calculate slope
-    slope = (10000-500)/(plantReadArray[0][0]-plantReadArray[19][0]);
+    slope = (plantReadArray[19][0]-plantReadArray[0][0])/(20.0);
 
     //send argon name, slope, and Max value
     sendData(myName, maxPlantReading, slope);
@@ -98,7 +98,7 @@ void loop() {
 //Read impedence values from the plant at current frequency for 1 second
 void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
   int _startTime;
-  float _plantReading, _pulseReading, _plantImp, _min, _max;
+  float _plantReading, _pulseReading, _min, _max;
   
   _startTime = millis();
   _min = 4096;
@@ -110,17 +110,14 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _plantReading = analogRead(_PLANTREADPIN);
 
     //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
-    if(_pulseReading != 0.0){
-      _plantImp = _plantReading; // / _pulseReading);
 
-      if(_plantImp < _min){
-        _min = _plantImp;
+      if(_plantReading < _min){
+        _min = _plantReading;
       }
 
-      if(_plantImp > _max){
-        _max = _plantImp;
+      if(_plantReading > _max){
+        _max = _plantReading;
       }
-    }
     }
 
   Serial.printf("max: %f\n", _max);
