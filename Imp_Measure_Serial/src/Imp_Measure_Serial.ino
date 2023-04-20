@@ -7,7 +7,7 @@
 
 const int PULSEPIN = A1;
 const int PULSEREADPIN = A2;
-const int PLANTREADPIN = A4;
+const int PLANTREADPIN = A3;
 int i, j, startTime;
 float hz;
 float plantReading, firstMax;

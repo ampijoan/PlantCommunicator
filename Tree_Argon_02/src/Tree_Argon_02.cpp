@@ -15,7 +15,7 @@
 
 void setup();
 void loop();
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
+float plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN);
 void sendData(String name, float plant01Max, float plant01Slope, float maxPlantReading, float slope);
 void reyaxSetup(String password);
 #line 10 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Tree_Argon_02/src/Tree_Argon_02.ino"
@@ -26,10 +26,8 @@ const int PULSEREADPIN = A2;
 const int PLANTREADPIN = A3;
 int i;
 int hz, startTime;
-float firstMax, maxPlantReading, slope, plant01Slope, plant01Max;
-float plantReadArray [20][2];
-
-void plantImpRead(int _hz, int _PULSEPIN, int _PLANTREADPIN, float *_maxPlantReading);
+float firstMax, plantReading, maxPlantReading, slope, plant01Slope, plant01Max;
+float plantReadArray [20];
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
 
@@ -74,31 +72,27 @@ void loop() {
     Serial.printf("Plant 01 Max: %f\n", plant01Max);
     Serial.printf("Plant 01 slope: %f\n", plant01Slope);
 
+    delay(100);
     //set counter to zero to start taking data after receiving data
     i = 0;
+    hz = 500;
+    Serial.printf("hz: %i\n", hz);
 
   }
 
 
   if(i < 20){
-
-    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
-
-    if(hz == 500.0){
-      firstMax = maxPlantReading;
-    }
-    //store raw values in 0 and normalized values in 1
-    plantReadArray[i][0] = maxPlantReading;
-    plantReadArray[i][1] = (maxPlantReading/firstMax);
-
+    plantReading = plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN);
+    plantReadArray[i] = plantReading;
+    
     i = i + 1;
-    hz = hz + 500.0;
-
+    hz = hz + 500;
   }
 
   if(i == 20){
+    maxPlantReading = plantReadArray[0];
     //calculate slope
-    slope = (10000-500)/(plantReadArray[0][0] - plantReadArray[19][0]);
+    slope = ((plantReadArray[19] - plantReadArray[0])/(20.0));
     Serial.printf("max: %f\nslope: %f\nreceived max: %f\nreceived slope: %f\n", maxPlantReading, slope, plant01Max, plant01Slope);
     //send previous plant data and new plant data
     sendData(myName, plant01Max, plant01Slope, maxPlantReading, slope);
@@ -111,7 +105,7 @@ void loop() {
 }
 
 //Read impedence values from the plant at current frequency for 1 second
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+float plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN){
   int _startTime;
   float _plantReading, _pulseReading, _min, _max;
   
@@ -124,20 +118,19 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
-
-      if(_plantReading < _min){
-        _min = _plantReading;
-      }
-
-      if(_plantReading > _max){
-        _max = _plantReading;
-      }
+    if(_plantReading < _min){
+      _min = _plantReading;
     }
 
+    if(_plantReading > _max){
+      _max = _plantReading;
+    }
+    
+  }
+
   Serial.printf("max: %f\n", _max);
-  *_maxPlantReading = _max;
-  //not currently returning min, but could if it becomes interesting
+
+  return _max;
 
 }
 

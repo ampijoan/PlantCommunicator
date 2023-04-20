@@ -5,6 +5,6 @@
         "*.ino": "cpp"
     },
     "cmake.configureOnOpen": false,
-    "particle.targetPlatform": "boron",
-    "particle.firmwareVersion": "1.5.2"
+    "particle.targetPlatform": "argon",
+    "particle.firmwareVersion": "4.0.2"
 }

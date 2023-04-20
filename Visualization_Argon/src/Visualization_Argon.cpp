@@ -20,6 +20,7 @@
 //tags used to tell vis software which plant data it is receiving
 void setup();
 void loop();
+float plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN);
 void MQTT_connect();
 bool MQTT_ping();
 #line 15 "/Users/adrianpijoan/Documents/IoT/PlantCommunicator/Visualization_Argon/src/Visualization_Argon.ino"
@@ -37,8 +38,8 @@ float plant01MaxRead, plant01SlopeRead, plant02MaxRead, plant02SlopeRead, plant0
 int plant01MaxInt, plant01SlopeInt, plant02MaxInt, plant02SlopeInt, plant03MaxInt, plant03SlopeInt;
 int i;
 int hz, startTime;
-float firstMax, maxPlantReading, slope, plant01Slope, plant01Max;
-float plantReadArray [20][2];
+float firstMax, plantReading, maxPlantReading, slope, plant01Slope, plant01Max;
+float plantReadArray [20];
 
 TCPClient TheClient;
 
@@ -52,20 +53,26 @@ Adafruit_MQTT_Subscribe plant02S = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "
 // Adafruit_MQTT_Subscribe plant03M = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant03Max");
 // Adafruit_MQTT_Subscribe plant03S = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/plant03Slope");
 
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading);
-
 SYSTEM_MODE(AUTOMATIC);
 
 void setup() {
   Serial.begin(9600);
   waitFor(Serial.isConnected, 10000);
 
+  //PinModes
+  pinMode(PULSEPIN, OUTPUT);
+  pinMode(PULSEREADPIN, INPUT);
+  pinMode(PLANTREADPIN, INPUT);
+
+  //initialize values
+  hz = 500;
+  startTime = millis();
+
+  //Adafruit subscribe
   mqtt.subscribe(&plant01M);
   mqtt.subscribe(&plant01S);
   mqtt.subscribe(&plant02M);
   mqtt.subscribe(&plant02S);
-  // mqtt.subscribe(&plant03M);
-  // mqtt.subscribe(&plant03S);
 
   i = 21;
 }
@@ -100,28 +107,20 @@ void loop() {
   plant02MaxInt = plant02MaxRead;
 
   i = 0;
-
+  hz = 500;
   }
 
-  if(i < 20){
-
-    plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN, &maxPlantReading);
-
-    if(hz == 500.0){
-      firstMax = maxPlantReading;
-    }
-    //store raw values in 0 and normalized values in 1
-    plantReadArray[i][0] = maxPlantReading;
-    plantReadArray[i][1] = (maxPlantReading/firstMax);
-
+   if(i < 20){
+    plantReading = plantImpRead(hz, PULSEPIN, PULSEREADPIN, PLANTREADPIN);
+    plantReadArray[i] = plantReading;
+    
     i = i + 1;
     hz = hz + 500.0;
-
   }
 
   if(i == 20){
-    plant03MaxInt = plantReadArray[0][0];
-    plant03SlopeRead = (10000-500)/(plantReadArray[0][0] - plantReadArray[19][0]);
+    plant03MaxInt = plantReadArray[0];
+    plant03SlopeRead = ((plantReadArray[19] - plantReadArray[0])/(20.0));
     plant03SlopeInt = plant03SlopeRead * 10;
     
     Serial.printf("%i\n%i\n", plant01MaxTag, plant01MaxInt);
@@ -137,7 +136,7 @@ void loop() {
 
 
 //Read impedence values from the plant at current frequency for 1 second
-void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN, float *_maxPlantReading){
+float plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN){
   int _startTime;
   float _plantReading, _pulseReading, _min, _max;
   
@@ -150,23 +149,21 @@ void plantImpRead(float _hz, int _PULSEPIN, int _PULSEREADPIN, int _PLANTREADPIN
     _pulseReading = analogRead(_PULSEREADPIN);
     _plantReading = analogRead(_PLANTREADPIN);
 
-    //Serial.printf("pulse read: %f\nplant read: %f\n", _pulseReading, _plantReading);
-
-      if(_plantReading < _min){
-        _min = _plantReading;
-      }
-
-      if(_plantReading > _max){
-        _max = _plantReading;
-      }
+    if(_plantReading < _min){
+      _min = _plantReading;
     }
 
+    if(_plantReading > _max){
+      _max = _plantReading;
+    }
+    
+  }
+
   //Serial.printf("max: %f\n", _max);
-  *_maxPlantReading = _max;
-  //not currently returning min, but could if it becomes interesting
+
+  return _max;
 
 }
-
 void MQTT_connect() {
   int8_t ret;
  

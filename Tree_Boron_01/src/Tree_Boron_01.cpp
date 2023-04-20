@@ -144,7 +144,7 @@ bool MQTT_ping() {
 //Send data with LoRa module
 void sendData(String name, int plantReading) {
   char buffer[60];
-  sprintf(buffer, "AT+SEND=%i,60,%i,%s\r\n", SENDADDRESS, plantReading, name.c_str());
+  sprintf(buffer, "AT+SEND=%i,60,%.2f,%.2f,%s\r\n", SENDADDRESS, plantReading, name.c_str());
   Serial1.printf("%s",buffer);
   //Serial1.println(buffer); 
   delay(1000);
